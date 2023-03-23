@@ -1,26 +1,92 @@
 pipeline {
-    agent any 
-    stages {
-        stage('compile and clean') {
-            steps { 
-                sh "mvn clean compile"
-            }
-        }
-        stage('test') {
-            steps {
-                sh "mvn test"
-            }
-        }
-        stage('deploy') {
-            steps {
-                sh "mvn package"
-            }
-        }
-      stage('archive') {
-        steps { 
-              archiveArtifacts '**/target/*.jar'
-        }
-        }
-    }
-}
+  agent any
 
+  environment {
+    DOCKERHUB_CREDENTIALS = credentials('dckr_pat_H__QFee-IOsCAmvo6jBP2xiCIvA')
+    REMOTE_SERVER = '54.158.197.246'
+    REMOTE_USER = 'ubuntu'            
+  }
+
+  // Fetch code from GitHub
+
+  stages {
+    stage('checkout') {
+      steps {
+        git branch: 'main', url: 'https://github.com/onir12345/project_maven'
+
+      }
+    }
+
+   // Build Java application
+
+    stage('Maven Build') {
+      steps {
+        sh 'mvn clean install'
+      }
+
+     // Post building archive Java application
+
+      post {
+        success {
+          archiveArtifacts artifacts: '**/target/*.jar'
+        }
+      }
+    }
+
+  // Test Java application
+
+    stage('Maven Test') {
+      steps {
+        sh 'mvn test'
+      }
+    }
+
+   // Build docker image in Jenkins
+
+    stage('Build Docker Image') {
+
+      steps {
+        sh 'docker build -t javaautomationfromgithubjenkinsdockeraws:latest . '
+
+        sh 'docker tag  javaautomationfromgithubjenkinsdockeraws shumail12345/javaautomationfromgithubjenkinsdockeraws:latest'
+
+      }
+    }
+
+   // Login to DockerHub before pushing docker Image
+
+    stage('Login to DockerHub') {
+      steps {
+        sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u    $DOCKERHUB_CREDENTIALS_USR --password-stdin'
+      }
+    }
+
+   // Push image to DockerHub registry
+
+    stage('Push Image to dockerHUb') {
+      steps {
+        sh 'docker push palakbhawsar/javawebapp:latest'
+      }
+      post {
+        always {
+          sh 'docker logout'
+        }
+      }
+
+    }
+
+   // Pull docker image from DockerHub and run in EC2 instance 
+
+    stage('Deploy Docker image to AWS instance') {
+      steps {
+        script {
+          sshagent(credentials: ['awscred']) {
+          sh "ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_SERVER} 'docker stop javaApp || true && docker rm javaApp || true'"
+      sh "ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_SERVER} 'docker pull palakbhawsar/javawebapp'"
+          sh "ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_SERVER} 'docker run --name javaApp -d -p 8081:8081 palakbhawsar/javawebapp'"
+          }
+        }
+      }
+    }
+  }
+}
