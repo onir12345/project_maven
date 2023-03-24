@@ -26,11 +26,11 @@ pipeline {
 
      // Post building archive Java application
 
-      post {
-        success {
-          archiveArtifacts artifacts: '**/target/*.jar'
-        }
-      }
+      //post {
+        //success {
+          //archiveArtifacts artifacts: '**/target/*.jar'
+        //}
+      //}
     }
 
   // Test Java application
